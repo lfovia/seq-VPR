@@ -100,23 +100,23 @@ class ResNet(nn.Module):
         return x
 
 
-# def print_nb_params(m):
-#     model_parameters = filter(lambda p: p.requires_grad, m.parameters())
-#     params = sum([np.prod(p.size()) for p in model_parameters])
-#     print(f'Trainable parameters: {params/1e6:.3}M')
+def print_nb_params(m):
+    model_parameters = filter(lambda p: p.requires_grad, m.parameters())
+    params = sum([np.prod(p.size()) for p in model_parameters])
+    print(f'Trainable parameters: {params/1e6:.3}M')
 
 
-# def main():
-#     x = torch.randn(1, 3, 320, 320)
-#     m = ResNet(model_name='resnet50',
-#                pretrained=True,
-#                layers_to_freeze=2,
-#                layers_to_crop=[],)
-#     r = m(x)
-#     helper.print_nb_params(m)
-#     print(f'Input shape is {x.shape}')
-#     print(f'Output shape is {r.shape}')
+def main():
+    x = torch.randn(1, 3, 320, 320)
+    m = ResNet(model_name='resnet50',
+               pretrained=True,
+               layers_to_freeze=2,
+               layers_to_crop=[],)
+    r = m(x)
+    print_nb_params(m)
+    print(f'Input shape is {x.shape}')
+    print(f'Output shape is {r.shape}')
 
 
-# if __name__ == '__main__':
-#     main()
+if __name__ == '__main__':
+    main()

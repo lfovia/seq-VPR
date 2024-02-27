@@ -4,7 +4,7 @@ from torchvision import transforms as T
 
 from dataloaders.GSVCitiesDataset import GSVCitiesDataset
 from . import PittsburgDataset
-from . import MapillaryDataset
+# from . import MapillaryDataset
 
 from prettytable import PrettyTable
 
@@ -70,7 +70,7 @@ class GSVCitiesDataModule(pl.LightningDataModule):
         self.std_dataset = mean_std['std']
         self.random_sample_from_each_place = random_sample_from_each_place
         self.val_set_names = val_set_names
-        self.save_hyperparameters() # save hyperparameter with Pytorch Lightening
+        self.save_hyperparameters() # save hyperparameter with Pytorch Lightening (they also reflect in the Hparams tab in Tensorboard)
 
         self.train_transform = T.Compose([
             T.Resize(image_size, interpolation=T.InterpolationMode.BILINEAR),

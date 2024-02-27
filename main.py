@@ -1,10 +1,11 @@
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint
+from pytorch_lightning.loggers import TensorBoardLogger
 from torch.optim import lr_scheduler, optimizer
 import utils
 
-from dataloaders.GSVCitiesDataloader import GSVCitiesDataModule
+# from dataloaders.GSVCitiesDataloader import GSVCitiesDataModule
 from models import helper
 
 
@@ -24,7 +25,7 @@ class VPRModel(pl.LightningModule):
                 layers_to_crop=[],
                 
                 #---- Aggregator
-                agg_arch='ConvAP', #CosPlace, NetVLAD, GeM
+                agg_arch='MixVPR', #CosPlace, NetVLAD, GeM, ConvAP
                 agg_config={},
                 
                 #---- Train hyperparameters
@@ -63,7 +64,7 @@ class VPRModel(pl.LightningModule):
         self.miner_name = miner_name
         self.miner_margin = miner_margin
         
-        self.save_hyperparameters() # write hyperparams into a file
+        self.save_hyperparameters() # write hyperparams into a file (they also reflect in the Hparams tab in Tensorboard)
         
         self.loss_fn = utils.get_loss(loss_name)
         self.miner = utils.get_miner(miner_name, miner_margin)
@@ -225,17 +226,18 @@ class VPRModel(pl.LightningModule):
             
 if __name__ == '__main__':
     pl.utilities.seed.seed_everything(seed=190223, workers=True)
+    logger = TensorBoardLogger("tb_logger", name="mixvpr_channel_mix_false_lr_00125")
         
     datamodule = GSVCitiesDataModule(
-        batch_size=120,
+        batch_size=30,
         img_per_place=4,
         min_img_per_place=4,
         shuffle_all=False, # shuffle all images or keep shuffling in-city only
         random_sample_from_each_place=True,
         image_size=(320, 320),
-        num_workers=28,
+        num_workers=19,
         show_data_stats=True,
-        val_set_names=['pitts30k_val', 'pitts30k_test', 'msls_val'], # pitts30k_val, pitts30k_test, msls_val
+        val_set_names=['pitts30k_test'], # pitts30k_val, pitts30k_test, msls_val
     )
     
     # examples of backbones
@@ -268,10 +270,11 @@ if __name__ == '__main__':
                 'out_channels' : 1024,
                 'mix_depth' : 4,
                 'mlp_ratio' : 1,
-                'out_rows' : 4}, # the output dim will be (out_rows * out_channels)
+                'out_rows' : 4,         # the output dim will be (out_rows * out_channels)
+                'use_channel_mix': False}, 
         
         #---- Train hyperparameters
-        lr=0.05, # 0.0002 for adam, 0.05 or sgd (needs to change according to batch size)
+        lr=0.0125, # 0.0002 for adam, 0.05 or sgd (needs to change according to batch size)
         optimizer='sgd', # sgd, adamw
         weight_decay=0.001, # 0.001 for sgd and 0 for adam,
         momentum=0.9,
@@ -291,9 +294,9 @@ if __name__ == '__main__':
     # model params saving using Pytorch Lightning
     # we save the best 3 models accoring to Recall@1 on pittsburg val
     checkpoint_cb = ModelCheckpoint(
-        monitor='pitts30k_val/R1',
+        monitor='pitts30k_test/R1',
         filename=f'{model.encoder_arch}' +
-        '_epoch({epoch:02d})_step({step:04d})_R1[{pitts30k_val/R1:.4f}]_R5[{pitts30k_val/R5:.4f}]',
+        '_epoch({epoch:02d})_step({step:04d})_R1[{pitts30k_test/R1:.4f}]_R5[{pitts30k_test/R5:.4f}]',
         auto_insert_metric_name=False,
         save_weights_only=True,
         save_top_k=3,
@@ -303,6 +306,7 @@ if __name__ == '__main__':
     # we instanciate a trainer
     trainer = pl.Trainer(
         accelerator='gpu', devices=[0],
+        logger=logger,
         default_root_dir=f'./LOGS/{model.encoder_arch}', # Tensorflow can be used to viz 
 
         num_sanity_val_steps=0, # runs a validation step before stating training
@@ -312,8 +316,25 @@ if __name__ == '__main__':
         callbacks=[checkpoint_cb],# we only run the checkpointing callback (you can add more)
         reload_dataloaders_every_n_epochs=1, # we reload the dataset to shuffle the order
         log_every_n_steps=20,
-        # fast_dev_run=True # uncomment or dev mode (only runs a one iteration train and validation, no checkpointing).
+        # fast_dev_run=True       # uncomment or dev mode (only runs a one iteration train and validation, no checkpointing).
     )
 
     # we call the trainer, we give it the model and the datamodule
     trainer.fit(model=model, datamodule=datamodule)
+
+'''
+ Performances on pitts30k_test (use_channel_mix = True, batch_size = 30x4, default learning rate)                
++----------+-------+-------+-------+-------+-------+-------+-------+
+|    K     |   1   |   5   |   10  |   15  |   20  |   50  |  100  |
++----------+-------+-------+-------+-------+-------+-------+-------+
+| Recall@K | 88.98 | 94.35 | 95.89 | 96.60 | 97.02 | 97.95 | 98.62 |
++----------+-------+-------+-------+-------+-------+-------+-------+
+
+
+Original
+9.4 M     Trainable params
+1.4 M     Non-trainable params
+10.9 M    Total params
+21.762    Total estimated model params size (MB)
+
+'''
